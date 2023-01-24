@@ -1,3 +1,5 @@
+# Live Demo
+<a href="https://mnist-cnn-react.vercel.app/" target="_blank">Mnist Classification</a>
 # To run
 
 ```Bash
