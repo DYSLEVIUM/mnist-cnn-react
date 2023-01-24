@@ -1,7 +1,9 @@
 import { LINE_WIDTH } from './constants';
 
 export const getContext = (canvas: HTMLCanvasElement) => {
-  return canvas.getContext('2d') as NonNullable<CanvasRenderingContext2D>;
+  return canvas.getContext('2d', {
+    willReadFrequently: true,
+  }) as NonNullable<CanvasRenderingContext2D>;
 };
 
 export const clearCanvas = (ctx: CanvasRenderingContext2D) => {

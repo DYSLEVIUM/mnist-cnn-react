@@ -1,5 +1,12 @@
 import { InferenceSession } from 'onnxjs';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   beginPath,
@@ -14,6 +21,16 @@ import {
 import { BLOCK_SIZE, MODEL_URL, NOTEBOOK_HTML_URL } from './utils/constants';
 import { convertImgDataToTensor, predict } from './utils/model';
 
+type TouchEventType = React.TouchEvent<HTMLCanvasElement>;
+type MouseEventType = React.MouseEvent<HTMLCanvasElement, MouseEvent>;
+
+// type predicts
+const isTouchEvent = (
+  ev: TouchEventType | MouseEventType
+): ev is TouchEventType => {
+  return (ev as TouchEventType).touches !== undefined;
+};
+
 const App = () => {
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const transformedCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -26,7 +43,7 @@ const App = () => {
   const session = useMemo(() => new InferenceSession(), []);
   const side = useMemo(() => BLOCK_SIZE * 12, []);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [prediction, setPrediction] = useState(-1);
+  const [prediction, setPrediction] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -39,18 +56,46 @@ const App = () => {
     })();
   }, []);
 
-  // useLayoutEffect(() => {
-  //   const drawCanvas = drawCanvasRef.current;
-  //   const transformedCanvas = transformedCanvasRef.current;
+  const preventDefault = useCallback(
+    (ev: TouchEvent) => {
+      if (drawCtx && drawCtx.canvas === ev.target) {
+        ev.preventDefault();
+      }
+    },
+    [drawCtx]
+  );
 
-  //   if (!drawCanvas || !transformedCanvas) return;
+  // this method uses 3 canvases to first take the image, then downscale it, then upscale again to get the pixelated image
+  useLayoutEffect(() => {
+    const drawCanvas = drawCanvasRef.current;
+    const transformedCanvas = transformedCanvasRef.current;
+    const viewer = viewerRef.current;
 
-  //   setDrawCtx(getContext(drawCanvas));
-  //   setTransformCtx(getContext(transformedCanvas));
+    if (!drawCanvas || !transformedCanvas || !viewer) return;
 
-  //   init(drawCanvas, side);
-  //   init(transformedCanvas, side);
-  // }, []);
+    setDrawCtx(getContext(drawCanvas));
+    init(drawCanvas, side);
+
+    setTransformCtx(getContext(transformedCanvas));
+    init(transformedCanvas, BLOCK_SIZE);
+
+    setViewerCtx(getContext(viewer));
+    init(viewer, side);
+
+    drawCanvas.addEventListener('touchstart', preventDefault, {
+      passive: false,
+    });
+    drawCanvas.addEventListener('touchend', preventDefault, { passive: false });
+    drawCanvas.addEventListener('touchmove', preventDefault, {
+      passive: false,
+    });
+
+    return () => {
+      drawCanvas.removeEventListener('touchstart', preventDefault);
+      drawCanvas.removeEventListener('touchend', preventDefault);
+      drawCanvas.removeEventListener('touchmove', preventDefault);
+    };
+  }, []);
 
   const makePrediction = useCallback(async () => {
     const data = getImageData(transformCtx!);
@@ -71,9 +116,21 @@ const App = () => {
   }, [isDrawing, transformCtx]);
 
   const startDraw = useCallback(
-    (ev: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    (ev: MouseEventType | TouchEventType) => {
       beginPath(drawCtx!);
-      moveCursor(drawCtx!, ev.nativeEvent);
+
+      let offsetX = 0,
+        offsetY = 0;
+      if (isTouchEvent(ev)) {
+        (offsetX = ev.touches[0].clientX - drawCtx!.canvas.offsetLeft),
+          (offsetY = ev.touches[0].clientY - drawCtx!.canvas.offsetTop);
+      } else {
+        (offsetX = ev.nativeEvent.offsetX), (offsetY = ev.nativeEvent.offsetY);
+      }
+      moveCursor(drawCtx!, {
+        offsetX,
+        offsetY,
+      });
       setIsDrawing(true);
     },
     [isDrawing, drawCtx]
@@ -86,10 +143,19 @@ const App = () => {
   }, [isDrawing, drawCtx]);
 
   const draw = useCallback(
-    (ev: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    (ev: MouseEventType | TouchEventType) => {
       if (!isDrawing) return;
 
-      drawLine(drawCtx!, ev.nativeEvent);
+      let offsetX = 0,
+        offsetY = 0;
+      if (isTouchEvent(ev)) {
+        (offsetX = ev.touches[0].clientX - drawCtx!.canvas.offsetLeft),
+          (offsetY = ev.touches[0].clientY - drawCtx!.canvas.offsetTop);
+      } else {
+        (offsetX = ev.nativeEvent.offsetX), (offsetY = ev.nativeEvent.offsetY);
+      }
+
+      drawLine(drawCtx!, { offsetX, offsetY });
 
       //
       transformCtx!.imageSmoothingEnabled = false;
@@ -115,24 +181,6 @@ const App = () => {
     [isDrawing, drawCtx, viewrCtx, transformCtx]
   );
 
-  // this method uses 3 canvases to first take the image, then downscale it, then upscale again to get the pixelated image
-  useEffect(() => {
-    const drawCanvas = drawCanvasRef.current;
-    const transformedCanvas = transformedCanvasRef.current;
-    const viewer = viewerRef.current;
-
-    if (!drawCanvas || !transformedCanvas || !viewer) return;
-
-    setDrawCtx(getContext(drawCanvas));
-    init(drawCanvas, side);
-
-    setTransformCtx(getContext(transformedCanvas));
-    init(transformedCanvas, BLOCK_SIZE);
-
-    setViewerCtx(getContext(viewer));
-    init(viewer, side);
-  }, []);
-
   return (
     <div className='container h-screen flex m-auto items-center flex-col p-4'>
       <h1 className='my-8 text-4xl text-white font-bold'>
@@ -151,6 +199,9 @@ const App = () => {
             onMouseDown={startDraw}
             onMouseUp={stopDraw}
             onMouseMove={draw}
+            onTouchStart={startDraw}
+            onTouchEnd={stopDraw}
+            onTouchMove={draw}
           />
           <canvas ref={transformedCanvasRef} className='hidden' />
           <canvas ref={viewerRef} />
@@ -161,7 +212,11 @@ const App = () => {
               Prediction
             </h1>
             <h1 className='mt-8 text-3xl font-bold dark:text-slate-400 text-center'>
-              {prediction}
+              {prediction !== null ? (
+                prediction
+              ) : (
+                <>Draw a number for prediction.</>
+              )}
             </h1>
           </div>
 
@@ -170,7 +225,7 @@ const App = () => {
               onClick={() => {
                 clearCanvas(drawCtx!);
                 clearCanvas(viewrCtx!);
-                setPrediction(-1);
+                setPrediction(null);
                 // pixelate(drawCtx!, transformCtx!, BLOCK_SIZE);
               }}
               title='Clear Canvas'
