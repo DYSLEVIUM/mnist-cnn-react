@@ -135,8 +135,8 @@ const App = () => {
 
   return (
     <div className='container h-screen flex m-auto items-center flex-col p-4'>
-      <h1 className='my-8'>
-        <p className='text-4xl text-white font-bold'>MNIST Classification</p>
+      <h1 className='my-8 text-4xl text-white font-bold'>
+        MNIST Classification
       </h1>
       <div className='mb-8 w-full'>
         <p className='text-2xl text-slate-400 text-center'>
@@ -145,7 +145,7 @@ const App = () => {
         </p>
       </div>
       <div className='container flex flex-wrap flex-col'>
-        <div className='gap-16 flex flex-wrap justify-center justify-items-center mb-10'>
+        <div className='gap-16 flex flex-wrap justify-center items-center mb-10'>
           <canvas
             ref={drawCanvasRef}
             onMouseDown={startDraw}
@@ -155,7 +155,7 @@ const App = () => {
           <canvas ref={transformedCanvasRef} className='hidden' />
           <canvas ref={viewerRef} />
         </div>
-        <div className='flex flex-col justify-start w-full justify-items-center px-4'>
+        <div className='flex flex-col justify-start w-full items-center px-4'>
           <div>
             <h1 className='text-3xl font-bold dark:text-white text-center'>
               Prediction
@@ -165,7 +165,7 @@ const App = () => {
             </h1>
           </div>
 
-          <div className='mt-8 flex justify-center justify-items-center'>
+          <div className='mt-8 w-full flex flex-col justify-center items-center'>
             <button
               onClick={() => {
                 clearCanvas(drawCtx!);
@@ -174,10 +174,20 @@ const App = () => {
                 // pixelate(drawCtx!, transformCtx!, BLOCK_SIZE);
               }}
               title='Clear Canvas'
-              className='transition-all px-16 py-2 font-semibold text-sm bg-sky-500 text-white hover:drop-shadow-xl rounded-full border-4 border-sky-500 hover:border-white'
+              className='transition-all w-fit px-16 py-2 font-semibold text-sm bg-sky-500 text-white hover:drop-shadow-xl rounded-full border-4 border-sky-500 hover:border-white'
             >
               Clear Canvas
             </button>
+            <p className='text-1xl text-slate-500 w-fit mt-4'>
+              <a
+                href='https://github.com/DYSLEVIUM/mnist-cnn-react'
+                target='_blank'
+                title='Github'
+                className='underline cursor-pointer'
+              >
+                Github
+              </a>
+            </p>
           </div>
         </div>
       </div>
