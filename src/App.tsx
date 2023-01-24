@@ -248,7 +248,7 @@ const App = () => {
       </div>
       <div className='mt-8 w-full min-h-full'>
         <h1 className='text-3xl text-white font-bold mb-4'>Jupyter Notebook</h1>
-        <iframe src={NOTEBOOK_HTML_URL} className='w-full h-full' />
+        <iframe src={NOTEBOOK_HTML_URL} className='w-full h-full overflow-scroll' />
       </div>
     </div>
   );
