@@ -188,7 +188,7 @@ const App = () => {
       </h1>
       <div className='mb-8 w-full'>
         <p className='text-2xl text-slate-400 text-center'>
-          Draw a number on the left canvas. The second canvas is the input that
+          Draw a number on the first canvas. The second canvas is the input that
           goes into the model.
         </p>
       </div>
