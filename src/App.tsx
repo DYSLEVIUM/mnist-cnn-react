@@ -175,8 +175,6 @@ const App = () => {
 
       // no need to pixelate manually as, we are pixelating by scaling the canvases
       // pixelate(drawCtx!, transformCtx!, BLOCK_SIZE);
-
-      makePrediction();
     },
     [isDrawing, drawCtx, viewrCtx, transformCtx]
   );
