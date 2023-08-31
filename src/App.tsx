@@ -1,7 +1,6 @@
-import { InferenceSession } from 'onnxjs';
+import { InferenceSession } from 'onnxruntime-web';
 import React, {
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -40,21 +39,9 @@ const App = () => {
   const [transformCtx, setTransformCtx] = useState<CanvasRenderingContext2D>();
   const [viewrCtx, setViewerCtx] = useState<CanvasRenderingContext2D>();
 
-  const session = useMemo(() => new InferenceSession(), []);
   const side = useMemo(() => BLOCK_SIZE * 12, []);
   const [isDrawing, setIsDrawing] = useState(false);
   const [prediction, setPrediction] = useState<number | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        await session.loadModel(MODEL_URL);
-      } catch (err) {
-        console.log("Couldn't load model");
-        console.error(err);
-      }
-    })();
-  }, []);
 
   const preventDefault = useCallback(
     (ev: TouchEvent) => {
@@ -63,6 +50,23 @@ const App = () => {
       }
     },
     [drawCtx]
+  );
+
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const session = useMemo(
+    async () =>
+      await InferenceSession.create(MODEL_URL, {
+        executionProviders: ['webgl'],
+      })
+        .then((session) => {
+          setModelLoaded(true);
+          return session;
+        })
+        .catch((err) => {
+          console.log("Couldn't load model");
+          console.error(err);
+        }),
+    []
   );
 
   // this method uses 3 canvases to first take the image, then downscale it, then upscale again to get the pixelated image
@@ -101,18 +105,29 @@ const App = () => {
     const data = getImageData(transformCtx!);
     const imgTensor = convertImgDataToTensor(data);
 
-    const probabilities = await predict(session, imgTensor);
-
-    let maxx = -1e9,
-      maxIdx = -1;
-    for (let i = 0; i < probabilities.length; ++i) {
-      if (probabilities[i] > maxx) {
-        maxx = probabilities[i];
-        maxIdx = i;
+    try {
+      const ss = await session;
+      if (!ss) {
+        throw new Error('Session not loaded yet');
       }
-    }
+      if (!modelLoaded) {
+        throw new Error('Model not loaded yet');
+      }
 
-    setPrediction(maxIdx);
+      const probabilities = await predict(ss, imgTensor);
+      let maxx = -1e9;
+      let maxIdx = -1;
+      probabilities.forEach((probability, idx) => {
+        if (probability <= maxx) return;
+        maxx = probability;
+        maxIdx = idx;
+      });
+
+      setPrediction(maxIdx);
+    } catch (err) {
+      console.error('Error making prediction');
+      console.error(err);
+    }
   }, [isDrawing, transformCtx]);
 
   const startDraw = useCallback(
@@ -144,33 +159,34 @@ const App = () => {
 
   const draw = useCallback(
     (ev: MouseEventType | TouchEventType) => {
+      if (!transformCtx || !drawCtx || !viewrCtx) return;
       if (!isDrawing) return;
 
       let offsetX = 0,
         offsetY = 0;
       if (isTouchEvent(ev)) {
-        (offsetX = ev.touches[0].clientX - drawCtx!.canvas.offsetLeft),
-          (offsetY = ev.touches[0].clientY - drawCtx!.canvas.offsetTop);
+        (offsetX = ev.touches[0].clientX - drawCtx.canvas.offsetLeft),
+          (offsetY = ev.touches[0].clientY - drawCtx.canvas.offsetTop);
       } else {
         (offsetX = ev.nativeEvent.offsetX), (offsetY = ev.nativeEvent.offsetY);
       }
 
-      drawLine(drawCtx!, { offsetX, offsetY });
+      drawLine(drawCtx, { offsetX, offsetY });
 
       //
-      transformCtx!.imageSmoothingEnabled = false;
-      transformCtx!.save();
-      transformCtx!.clearRect(0, 0, side, side);
-      transformCtx!.scale(BLOCK_SIZE / side, BLOCK_SIZE / side);
-      transformCtx!.drawImage(drawCtx!.canvas, 0, 0);
-      transformCtx!.restore();
+      transformCtx.imageSmoothingEnabled = false;
+      transformCtx.save();
+      transformCtx.clearRect(0, 0, side, side);
+      transformCtx.scale(BLOCK_SIZE / side, BLOCK_SIZE / side);
+      transformCtx.drawImage(drawCtx.canvas, 0, 0);
+      transformCtx.restore();
 
-      viewrCtx!.imageSmoothingEnabled = false;
-      viewrCtx!.save();
-      viewrCtx!.clearRect(0, 0, side, side);
-      viewrCtx!.scale(side / BLOCK_SIZE, side / BLOCK_SIZE);
-      viewrCtx!.drawImage(transformCtx!.canvas, 0, 0);
-      viewrCtx!.restore();
+      viewrCtx.imageSmoothingEnabled = false;
+      viewrCtx.save();
+      viewrCtx.clearRect(0, 0, side, side);
+      viewrCtx.scale(side / BLOCK_SIZE, side / BLOCK_SIZE);
+      viewrCtx.drawImage(transformCtx.canvas, 0, 0);
+      viewrCtx.restore();
       //
 
       // no need to pixelate manually as, we are pixelating by scaling the canvases
@@ -246,7 +262,10 @@ const App = () => {
       </div>
       <div className='mt-8 w-full min-h-full'>
         <h1 className='text-3xl text-white font-bold mb-4'>Jupyter Notebook</h1>
-        <iframe src={NOTEBOOK_HTML_URL} className='w-full h-full overflow-scroll' />
+        <iframe
+          src={NOTEBOOK_HTML_URL}
+          className='w-full h-full overflow-scroll'
+        />
       </div>
     </div>
   );
